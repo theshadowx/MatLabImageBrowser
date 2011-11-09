@@ -22,7 +22,7 @@ function varargout = image_browser(varargin)
 
 % Edit the above text to modify the response to help image_browser
 
-% Last Modified by GUIDE v2.5 24-Apr-2010 11:11:09
+% Last Modified by GUIDE v2.5 25-Oct-2011 20:56:02
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -47,15 +47,32 @@ end
 % --- Executes just before image_browser is made visible.
 function image_browser_OpeningFcn(hObject, eventdata, handles, varargin)
 clc
-global dirName files maxNumCols maxNumFiles
-dirName='/media/Media/themes/wallpaper';
-addpath(dirName);                   % ajouter le chemin
-maxNumFiles = 200;                          % Nombre maximal d'images
-maxNumCols = 4;                             % Nombre maximal de colonnes
-files=dir(fullfile(dirName,'*.bmp'));
-organize_image(dirName,files,maxNumFiles,maxNumCols,handles);
-handles.output = hObject;
-setappdata(handles.figure1,'actionItems',[handles.imageSelection,handles.Type_im,handles.pathfolder]); % ajouter le bouton imageSelection comme donnée dans  "handles.figure1"
+global maxNumCols maxNumRows page N_Im_Draw NDelIm...
+       dirName cPitch rPitch axWidth axHight N_err
+maxNumCols = 4;                                                                % maximal number of colomns
+maxNumRows = 4;                                                                % maximal number of rows
+N_Im_Draw=16;                                                                  % number of images in each page
+page=1;                                                                        % initialization of the current page 
+N_err=0;                                                                       % initialization of number of errors
+NDelIm=0;                                                                      % initialize the number of imge deleted
+dirName='';                                                                    % initialization of the current directory name
+rPitch = 0.98/maxNumRows;                                                      % Abcissa of the origin 
+cPitch = 0.98/maxNumCols;                                                      % ordinate of the origin
+axWidth = 0.9/maxNumCols;                                                      % width of the graph
+axHight = 0.9/maxNumRows;                                                      % heigh of the graph
+set(handles.prev_but,'enable','off');                                          % make the "previous" button deactivate
+set(handles.next_but,'enable','off');                                          % make the "next" button deactivate
+set(handles.slider1,'enable','off');                                           % deactivate the slider not used anymmore for now
+set(handles.cancel,'enable','off');                                            % deactivate the cancel button
+set(handles.pathfolder,'string',dirName);                                      % initialize the directory field 
+setappdata(handles.figure1,'actionItems',...                                   % store GUI objects in the figure as a
+                        [handles.imageSelection,...                            % collection named "actionItems"
+                        handles.Type_im,...
+                        handles.pathfolder,...
+                        handles.next_but,...
+                        handles.prev_but]...
+           );
+handles.output = hObject;                                                       
 guidata(hObject, handles);
 
 
@@ -65,37 +82,39 @@ varargout{1} = handles.output;
 
 
 
-
-% elle est appelée à chaque fois qu'on clique sur "imageSelection"
-
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % --- Executes on button press in imageSelection.
+% its role to collecte the files selectionned with types of the image
 function imageSelection_Callback(hObject, eventdata, handles)
-    global dirName maxNumCols maxNumFiles
-    set(handles.cancel,'value',0);              % initialiser le bouton 'Cancel'
+    global dirName 
+    set(handles.cancel,'value',0);                                              % initialize cancel button
 
-  % selection des images à afficher  
-  % ce qui va se traduire par les noms des fichiers et leur chemin 
-    [files_ dirName] = uigetfile({'*.png ; *.jpg;*.bmp'},'MultiSelect','on');
-    if ~dirName                                  % si rien n'est selectionner
-        return;
+    [files dirName FilterIndex] = uigetfile({...
+                                '*.jpg;*.bmp;*png','All supported format(*.jpg;*.bmp;*png)';...
+                                '*.bmp','Image format bmp (*.bmp)';...          % file selection with multiple 
+                                '*.jpg','Image format jpg (*.jpg)';...          % filters
+                                '*.png','Image format png (*.png)';...          %
+                                },'MultiSelect','on');
+    if ~dirName                                                                 % if no files selected nothing to do
+        return;                                                                                         
     end
-    set(handles.Type_im,'value',4);
-    organize_image(dirName,files_,maxNumFiles,maxNumCols,handles);
+    set(handles.Type_im,'value',FilterIndex);                                   % change the popupmenu to the kind of images selected
+    set(handles.pathfolder,'string',dirName);
+    organize_image(dirName,files,handles);                                      % organize the images selected in the GUI
   
 
- %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Gestion du slider permettre de mouvoir le panneau 
-% d'affichage
+ %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% *******         the slider is for now unused  *************** 
     
     % --- Executes on slider movement.
 function slider1_Callback(hObject, eventdata, handles)
-    pos = get(handles.uipanel1,'position');       % extraire la position du panneau 
-    hight = pos(4);                               % la hauteur
-    if hight > 1                                  % si la hauteur du panneau est plus grande que la fenêtre
-        val = get(hObject,'value');                % obtention de la position du slider         
-        yPos = -val * (hight-0.95);               % convertir en position du panneau
-        pos(2) = yPos;                            
-        set(handles.uipanel1,'position',pos);     % modifier la position du panneau
+    pos = get(handles.uipanel1,'position');                                     % extract the position(x,y,width,height) of the pannel 
+    hight = pos(4);                                                             % get the height
+    if hight > 1                                                                % if the height of the pannel is higher than the window
+        val = get(hObject,'value');                                             % get the position of the slider         
+        yPos = -val * (hight-0.95);                                             %  
+        pos(2) = yPos;                                                          % modify the position of the pannel correspondingly
+        set(handles.uipanel1,'position',pos);                                   % with the slider position
     end
 
 
@@ -109,142 +128,22 @@ else
 end
 
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Cette fonction permet d'oganiser la position et la taille 
-% des images dependant de leurs nombres
-
-function organize_image(dirName,files,maxNumFiles,maxNumCols,handles)
-    global type
-    pos=[0 0 0.974 0.92];
-    set(handles.uipanel1,'position',pos);   % affectation du changement pour panneau
-    set( handles.slider1,'enable','off'); % de même pour slider
-    
-    if ~dirName                                  % si rien n'est selectionner
-        return;
-    else
-        set(handles.pathfolder,'string',dirName);
-    end
-   if isstruct(files) 
-    files={files.name};
-   end
-   
-   if ~iscell(files)
-        temp = files;
-        files = cell(1);
-        files{1} = temp;
-   end
-   
-   cd(dirName);                                % changer le dossier courant en celui où se trouve les fichiers
-   setappdata(handles.figure1,'files',files);  % grouper les fichier en un bloc "files"
-   N= size(files,2);
-   
-   if (N==0) 
-        warndlg(sprintf('No %s file in this directory',type),'!! Warning !!');
-   end
-   
-   if iscell(files)
-       if N > maxNumFiles                          % si le nombre de fichier est superieur au nombre Max
-           warndlg(['Maximum number of files is ' num2str(maxNumFiles) '!'],'To many files'); % affichage d'un warning dialog  
-           N = maxNumFiles;                        
-           files = files(1:N);                     % on prend just les Nmax premieres images
-       end
-   end
-        
-    if N > maxNumCols^2                         % si nombre de fichiers est superieur au carré du nombre de collones max
-        cols = maxNumCols;                      % Nombre de colonnes actuel est le max   
-        rows = ceil(N/cols);                    % nombre de lignes (arrondir à l'entier super ou égale)
-        ratio = rows/cols;              
-        hight = ratio;                          % 
-        pos = [0 -(hight-0.95) 0.97 hight];     % position du panneau 
-        set(handles.uipanel1,'position',pos);   % affectation du changement pour panneau
-        set( handles.slider1,'enable','on','value',1); % de même pour slider
-    else
-        cols = ceil( sqrt(N) );                 % Nombre de colonnes
-        rows = cols - floor( (cols^2 - N)/cols ); % Nombre de ligne
-        set( handles.slider1,'enable','off');    % desactivation du slider
-    end
-    
-    setappdata(handles.figure1,'cols',cols);    % grouper les colonnes  et les ajouter comme donnée du handle.figure1
-    
-    rPitch = 0.98/rows;
-    cPitch = 0.98/cols;
-    axWidth = 0.9/(cols);
-    axHight = (0.85/(rows));  
-    hAxes = getappdata(handles.figure1,'hAxes');
-    if ~isempty(hAxes)
-        f = find ( ishandle(hAxes) & hAxes);
-        delete(hAxes(f));
-    end
-    
-    axesProp = {'dataaspectratio' ,...
-                                'Parent',...
-                                'PlotBoxAspectRatio', ...
-                                'xgrid' ,...
-                                'ygrid'};
-    axesVal = {[1,1,1] , ...
-                            handles.uipanel1,...
-                            [1 1 1]...
-                            'off',...
-                            'off'};
-
-    hAxes = zeros(N,1);
-    ind = 1;
-    hActions = getappdata(handles.figure1,'actionItems');   
-    set(hActions,'enable','off');                           % verrouillage du bouton (imageSelection) 
-    while ind<=N && ~get(handles.cancel,'value')             % tant que les images ne sont pas tous afficher et qu'on a pas cliqué sur le "Cancel"
-        [r c] = ind2sub([rows cols],ind);
-        x = 1-(c)*cPitch;
-        y = 1-(r)*rPitch;
-        hAxes(ind) = axes( 'position', [x y axWidth axHight],axesProp,axesVal); % création "axes" et la pointé par hAxes (axes handle)
-        im = imread(fullfile(dirName,files{ind}));                % lire l'image
-      	%im = imresize(im,1/4);                              
-        plotImInAxis(im,hAxes(ind),files{ind},11-cols)      % afficher l'image dans la position déterminée avant
-        pause(0.01);
-        ind = ind + 1;
-    end 
-    set(hActions,'enable','on');                            %  Deverouillage
-    set(handles.cancel,'value',0);                          % initialiser l'etat du bouton "Cancel"
-    setappdata(handles.figure1,'hAxes',hAxes)               % Ajouter les figure comme donnée du handles.figure1
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Cette Fonction sert à mettre les images dans l'axes 
-%  généré précédement en ajoutant le nom de l'image
-% comme titre
-    
-function plotImInAxis(im,hAx,str,fontSize)
-    imageProp = { 'ButtonDownFcn'};
-    imageVal = { 'openSpecificImage( guidata(gcf) )'};
-    
-    % imagesc affiche l'image dans l'axes.
-    % la propriété 'ButtonDownFcn' va permettre d'executer la fonction
-    % 'openSpecificImage()'quand on click sur l'image.
-    % l'argument 'guidata(gcf)' va extraire les données de figure
-    % selectionnée .
-    imagesc(im,imageProp,imageVal,'parent',hAx );   
-    axis(hAx,'image');
-    axis(hAx,'off');             % enlever les coordonnées
-    str = strrep( str,'_',' ');  % remplacer '_' par ' '
-    title( hAx,str,'fontsize',fontSize); % titre
-    drawnow;
-
-
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % --- Executes on button press in cancel.
 function cancel_Callback(hObject, eventdata, handles)
 
-
-
-function pathfolder_Callback(hObject, eventdata, handles)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function pathfolder_Callback(hObject, eventdata, handles)                      
 global dirName
-
-dirName=get(handles.pathfolder,'string');
+                                                                               % when the path of the folder is validated
+dirName=get(handles.pathfolder,'string');                                      % check if the path exists
 checkdir=isdir(dirName);
-if ~checkdir
-    warndlg('No such directory','!! Warning!!');
+if ~checkdir                                                                  
+    warndlg('No such directory','!! Warning!!');                               % if doesn't exist a warning message will be shown
     return;
 end
-Type_im_Callback(handles.Type_im, eventdata, handles);
-
+Type_im_Callback(handles.Type_im, eventdata, handles);                         % get the files from the path directory written and with  
+                                                                               % respect of the file extention selected in the popupmenu
 
 
 % --- Executes during object creation, after setting all properties.
@@ -259,33 +158,73 @@ if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgr
     set(hObject,'BackgroundColor','white');
 end
 
-
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % --- Executes on selection change in Type_im.
 function Type_im_Callback(hObject, eventdata, handles)
-global type files maxNumCols maxNumFiles dirName
+global  files dirName
+
 str = get(hObject, 'String');
 val = get(hObject,'Value');
-switch str{val};
+switch str{val};                                                                % popupmenu selection
+    case 'any'                                                                  % extension for image files
+        type='all';
     case 'bmp'
         type='*.bmp';
     case 'jpg'
         type='*.jpg';
     case 'png'
         type='*.png';
-    case 'any'
-        type='all';
 end
-if(strcmp(type,'all'))
-    files=dir(dirName);
-    files=files(find(~strcmp({files(:).name},'.')));
-    files=files(find(~strcmp({files(:).name},'..')));
-else
-    files=dir(fullfile(dirName,type));
+
+if isempty(dirName)                                                             % if no directory was mentioned before  
+        return;                                                                 % nothing will be done
+else                                                                            % else 
+    set(handles.pathfolder,'string',dirName);                                   % set the path of the directory in the field
+    if(strcmp(type,'all'))                                                      % if all supported files are selected
+        
+        filesjpg=dir(fullfile(dirName,'*.jpg'));                                % get all jpg files from the directory
+        filesbmp=dir(fullfile(dirName,'*.bmp'));                                % get all bmp files from the directory
+        filespng=dir(fullfile(dirName,'*.png'));                                % get all png files from the directory
+        files=struct('name',{filesjpg.name filesbmp.name filespng.name},...     % merge all these files in one cell
+                     'date',{filesjpg.date filesbmp.date filespng.date},...
+                    'bytes',{filesjpg.bytes filesbmp.bytes filespng.bytes},...
+                    'isdir',{filesjpg.isdir filesbmp.isdir filespng.isdir},...
+                  'datenum',{filesjpg.datenum filesbmp.datenum filespng.datenum});
+        organize_image(dirName,files,handles);                                  % ask to be shown in the GUI
+    else
+        files=dir(fullfile(dirName,type));                                      % if a specific extention is selected
+        organize_image(dirName,files,handles);                                  % this type of images will be shown
+    end
 end
-organize_image(dirName,files,maxNumFiles,maxNumCols,handles);
+
 
 % --- Executes during object creation, after setting all properties.
 function Type_im_CreateFcn(hObject, eventdata, handles)
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
 end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% --- Executes on button press in prev_but.
+function prev_but_Callback(hObject, eventdata, handles)
+% hObject    handle to prev_but (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+global page ;
+	page=page-1;                                                                 % go to the previous page
+    showpageim(handles)                                                          % show the pictures
+    if page==1                                                                   % if it's the first page
+        set( handles.prev_but,'enable','off');                                   % desactivate the button
+    end
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% --- Executes on button press in next_but.
+function next_but_Callback(hObject, eventdata, handles)
+% hObject    handle to next_but (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+	global  N page MaxIndDraw;
+	page=page+1;                                                                 % go to the next page
+    showpageim(handles)                                                          % show the pictures
+    if     MaxIndDraw==N                                                         % if we are it's last page
+           set( handles.next_but,'enable','off');                                % deactivate the button
+    end
