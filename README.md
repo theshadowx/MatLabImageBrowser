@@ -11,7 +11,7 @@ The original project is here http://www.mathworks.com/matlabcentral/fileexchange
 
 You can watch the demo in this link : https://www.youtube.com/watch?v=PhQ6fVhytqA
 
-## Makin the GUI
+## Making the GUI
 
 I you are using a different version of GUIDE from the one used here, 
 It's better that you make a new GUI (.fig file) by following the steps shown in this video
